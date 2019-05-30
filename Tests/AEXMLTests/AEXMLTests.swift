@@ -1,3 +1,9 @@
+/**
+ *  https://github.com/tadija/AEXML
+ *  Copyright (c) Marko Tadić 2014-2019
+ *  Licensed under the MIT license. See LICENSE file.
+ */
+
 import Foundation
 import XCTest
 @testable import AEXML
@@ -104,6 +110,35 @@ class AEXMLTests: XCTestCase {
         } catch {
             XCTFail("Should be able to parse XML Data into XML Document without throwing error.")
         }
+    }
+    
+    func testXMLParserTrimsWhitespace() {
+        let result = whitespaceResult(shouldTrimWhitespace: true)
+        XCTAssertEqual(result, "Hello,")
+    }
+    
+    func testXMLParserWithoutTrimmingWhitespace(){
+        let result = whitespaceResult(shouldTrimWhitespace: false)
+        XCTAssertEqual(result, "Hello, ")
+    }
+    
+    private func whitespaceResult(shouldTrimWhitespace: Bool) -> String?{
+        do {
+            var options = AEXMLOptions()
+            options.parserSettings.shouldTrimWhitespace = shouldTrimWhitespace
+            
+            let testDocument = AEXMLDocument(options: options)
+            let url = URLForResource(fileName: "whitespace_examples", withExtension: "xml")
+            let data = try Data.init(contentsOf: url)
+            
+            let parser = AEXMLParser(document: testDocument, data: data)
+            try parser.parse()
+            
+            return testDocument.root["text"].first?.string
+        } catch {
+            XCTFail("Should be able to parse XML without throwing an error")
+        }
+        return nil
     }
     
     func testXMLParserError() {
@@ -301,6 +336,33 @@ class AEXMLTests: XCTestCase {
         XCTAssertEqual(count, 2, "Should be able to return elements with given attribute keys.")
     }
     
+    func testAllDescendantsWherePredicate() {
+        let children = exampleDocument.allDescendants { $0.attributes["color"] == "yellow" }
+        
+        XCTAssertEqual(children.count, 2, "Should be able to return elements matching predicate.")
+    }
+    
+    func testFirstDescendantWherePredicate() {
+        let descendant = plantsDocument.root.firstDescendant { $0.hasDescendant { $0.name == "LIGHT" && $0.value == "Sunny" } }
+        let plantName = descendant?["COMMON"].value
+        
+        XCTAssertEqual(plantName, "Black-Eyed Susan", "Should be able to find first child satisfying predicate.")
+    }
+    
+    func testHasDescendantWherePredicate() {
+        let hasDescendant = plantsDocument.hasDescendant { $0.name == "AVAILABILITY" && $0.int == 030699 }
+        
+        XCTAssert(hasDescendant, "Should be able to determine that document has a child satisfying predicate.")
+    }
+    
+    func testSpecialCharacterTrimRead() {
+        let expected = "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>\n<elements>\n\t<string name=\"this_and_that\">This &amp; that</string>\n</elements>"
+        
+        let readerDocument = try! AEXMLDocument(xml: expected)
+        let readerXml = readerDocument.xml
+        XCTAssertEqual(readerXml, expected, "Should be able to print XML formatted string.")
+    }
+    
     // MARK: - XML Write
     
     func testAddChild() {
@@ -332,6 +394,18 @@ class AEXMLTests: XCTestCase {
         
         XCTAssertEqual(lastCat.attributes["color"], "orange", "Should be able to get attribute value from added element.")
         XCTAssertEqual(penultDog.string, "Kika", "Should be able to add child with attributes without overwrites existing elements. (Github Issue #28)")
+    }
+    
+    func testAddChildren() {
+        let animals: [AEXMLElement] = [
+            AEXMLElement(name: "dinosaurs"),
+            AEXMLElement(name: "birds"),
+            AEXMLElement(name: "bugs"),
+        ]
+        exampleDocument.root.addChildren(animals)
+        
+        let animalsCount = exampleDocument.root.children.count
+        XCTAssertEqual(animalsCount, 5, "Should be able to add children elements to an element.")
     }
     
     func testAddAttributes() {
@@ -375,6 +449,8 @@ class AEXMLTests: XCTestCase {
         XCTAssertEqual(testDocument.xml, "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>\n<children>\n\t<child attribute=\"attributeValue&lt;&amp;&gt;\">value</child>\n\t<child />\n\t<child>&amp;&lt;&gt;&apos;&quot;</child>\n</children>", "Should be able to print XML formatted string.")
         
         XCTAssertEqual(testDocument.xmlCompact, "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?><children><child attribute=\"attributeValue&lt;&amp;&gt;\">value</child><child /><child>&amp;&lt;&gt;&apos;&quot;</child></children>", "Should be able to print compact XML string.")
+        
+        XCTAssertEqual(testDocument.xmlSpaces, "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"no\"?>\n<children>\n    <child attribute=\"attributeValue&lt;&amp;&gt;\">value</child>\n    <child />\n    <child>&amp;&lt;&gt;&apos;&quot;</child>\n</children>", "Should be able to print XML formatted string.")
     }
     
     // MARK: - XML Parse Performance
